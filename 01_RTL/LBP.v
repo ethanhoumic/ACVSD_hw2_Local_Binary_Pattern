@@ -41,7 +41,56 @@ module LBP # (
     output                  data_rready
 );
 
-    AXI_MASTER #(
+    // FSM
+
+    localparam S_IDLE  = 3'b000;
+    localparam S_READ  = 3'b001;
+    localparam S_CALC  = 3'b010;
+    localparam S_WRITE = 3'b011;
+    localparam S_DONE  = 3'b100;
+    reg [2:0] state_r, state_w;
+
+    reg [7:0] cnt_r, cnt_w;
+    reg [7:0] row_cnt_r, row_cnt_w;        // count of rows processed (0 to 127)
+    reg [7:0] col_cnt_r, col_cnt_w;        // count of columns processed (0 to 127)
+
+    // lbp calculation
+    reg  [7:0] data_r [0:8], data_w [0:8];               // [0] [1] [2]
+    wire [7:0] lbp_0_w, lbp_90_w, lbp_180_w, lbp_270_w;  // [7] [8] [3]
+    wire       lbp_flag_w [0:8];                           // [6] [5] [4]
+    wire [7:0] lbp_min1_w, lbp_min2_w, lbp_min_w;;
+    
+    integer i;
+    genvar j;
+    generate
+        for (j = 0; j < 9; j = j + 1) begin
+            assign lbp_flag_w[j] = (data_r[j] > data_r[8]) ? 1 : 0;
+        end
+    endgenerate
+    assign lbp_0_w   = {lbp_flag_w[7], lbp_flag_w[6], lbp_flag_w[5], lbp_flag_w[4], lbp_flag_w[3], lbp_flag_w[2], lbp_flag_w[1], lbp_flag_w[0]};
+    assign lbp_90_W  = {lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1], lbp_flag_w[2], lbp_flag_w[3], lbp_flag_w[4], lbp_flag_w[5]};
+    assign lbp_180_w = {lbp_flag_w[4], lbp_flag_w[5], lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1], lbp_flag_w[2], lbp_flag_w[3]};
+    assign lbp_270_W = {lbp_flag_w[2], lbp_flag_w[3], lbp_flag_w[4], lbp_flag_w[5], lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1]};
+    assign lbp_min1_w = (lbp_0_w < lbp_90_W) ? lbp_0_w : lbp_90_W;
+    assign lbp_min2_w = (lbp_180_w < lbp_270_W) ? lbp_180_w : lbp_270_W;
+    assign lbp_min_w  = (lbp_min1_w < lbp_min2_w) ? lbp_min1_w : lbp_min2_w;
+
+    // AXI control signals
+    reg [2:0] axi_read_cnt_r, axi_read_cnt_w;   // count of AXI read transactions (0 to 3)
+    reg [ADDR_WIDTH-1:0] axi_read_addr_r, axi_read_addr_w;
+    reg [ADDR_WIDTH-1:0] axi_write_addr_r, axi_write_addr_w;
+    reg [DATA_WIDTH-1:0] axi_write_data_r, axi_write_data_w;
+    reg read_start_r, read_start_w;
+    reg write_start_r, write_start_w;
+    wire [DATA_WIDTH-1:0] read_data_w;
+    wire axi_finish_w;
+    wire read_valid_w;
+    wire [1:0] axi_read_len_w = (col_cnt_r == 127 || col_cnt_r == 0) ? 2 : 3;  // read 2 pixel for first and last column, otherwise read 3 pixels
+
+    // done signal
+    reg finish_r, finish_w;
+
+        AXI_MASTER #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH),
         .STRB_WIDTH(STRB_WIDTH)
@@ -52,9 +101,9 @@ module LBP # (
         .write_start(write_start_r),
         .finish(axi_finish),
         .read_addr(axi_read_addr_r),
-        .read_len(axi_read_len_w),
+        .read_len({6'b0, axi_read_len_w}),
         .write_addr(axi_write_addr_r),
-        .write_len(0),
+        .write_len(8'b0),
         .write_data(axi_write_data_r),
         .read_data(read_data_w),
         .read_valid(read_valid_w),
@@ -81,55 +130,6 @@ module LBP # (
         .data_rvalid(data_rvalid),
         .data_rready(data_rready)
     );
-
-    // FSM
-
-    localparam S_IDLE  = 3'b000;
-    localparam S_READ  = 3'b001;
-    localparam S_CALC  = 3'b010;
-    localparam S_WRITE = 3'b011;
-    localparam S_DONE  = 3'b100;
-
-    reg [2:0] state_r, state_w;
-
-    reg [7:0] cnt_r, cnt_w;
-    reg [7:0] row_cnt_r, row_cnt_w;        // count of rows processed (0 to 127)
-    reg [7:0] col_cnt_r, col_cnt_w;        // count of columns processed (0 to 127)
-
-    // lbp calculation
-    reg  [7:0] data_r [0:8], data_w [0:8];               // [0] [1] [2]
-    wire [7:0] lbp_0_w, lbp_90_w, lbp_180_w, lbp_270_w;  // [7] [8] [3]
-    wire       lbp_flag [0:8];                           // [6] [5] [4]
-    wire [7:0] lbp_min1_w, lbp_min2_w, lbp_min_w;;
-    
-    genvar j;
-    generate
-        for (j = 0; j < 9; j = j + 1) begin
-            assign lbp_flag_w[j] = (data_r[j] > data_r[8]) ? 1 : 0;
-        end
-    endgenerate
-    lbp_0_w   = {lbp_flag[7], lbp_flag[6], lbp_flag[5], lbp_flag[4], lbp_flag[3], lbp_flag[2], lbp_flag[1], lbp_flag[0]};
-    lbp_90_W  = {lbp_flag[6], lbp_flag[7], lbp_flag[0], lbp_flag[1], lbp_flag[2], lbp_flag[3], lbp_flag[4], lbp_flag[5]};
-    lbp_180_w = {lbp_flag[4], lbp_flag[5], lbp_flag[6], lbp_flag[7], lbp_flag[0], lbp_flag[1], lbp_flag[2], lbp_flag[3]};
-    lbp_270_W = {lbp_flag[2], lbp_flag[3], lbp_flag[4], lbp_flag[5], lbp_flag[6], lbp_flag[7], lbp_flag[0], lbp_flag[1]};
-    assign lbp_min1_w = (lbp_0_w < lbp_90_W) ? lbp_0_w : lbp_90_W;
-    assign lbp_min2_w = (lbp_180_w < lbp_270_W) ? lbp_180_w : lbp_270_W;
-    assign lbp_min_w  = (lbp_min1_w < lbp_min2_w) ? lbp_min1_w : lbp_min2_w;
-
-    // AXI control signals
-    reg [2:0] axi_read_cnt_r, axi_read_cnt_w;   // count of AXI read transactions (0 to 3)
-    reg [ADDR_WIDTH-1:0] axi_read_addr_r, axi_read_addr_w;
-    reg [ADDR_WIDTH-1:0] axi_write_addr_r, axi_write_addr_w;
-    reg [DATA_WIDTH-1:0] axi_write_data_r, axi_write_data_w;
-    reg read_start_r, read_start_w;
-    reg write_start_r, write_start_w;
-    wire [DATA_WIDTH-1:0] read_data_w;
-    wire axi_finish_w;
-    wire read_valid_w;
-    wire axi_read_len_W = (col_cnt_r == 127 || col_cnt_r == 0) ? 2 : 3;  // read 2 pixel for first and last column, otherwise read 3 pixels
-
-    // done signal
-    reg finish_r, finish_w;
 
     // CDC synchronization
     reg start_sync1, start_sync2, start_sync3;
@@ -320,10 +320,30 @@ module LBP # (
 
     always @(posedge clk_B or posedge rst) begin
         if (rst) begin
-            
+            finish_r <= 0;
+            read_start_r <= 0;
+            write_start_r <= 0;
+            axi_read_cnt_r <= 0;
+            axi_read_addr_r <= 0;
+            axi_write_addr_r <= 0;
+            axi_write_data_r <= 0;
+            cnt_r <= 0;
+            row_cnt_r <= 0;
+            col_cnt_r <= 0;
+            state_r <= S_IDLE;
         end
         else begin
-            
+            finish_r <= finish_w;
+            read_start_r <= read_start_w;
+            write_start_r <= write_start_w;
+            axi_read_cnt_r <= axi_read_cnt_w;
+            axi_read_addr_r <= axi_read_addr_w;
+            axi_write_addr_r <= axi_write_addr_w;
+            axi_write_data_r <= axi_write_data_w;
+            cnt_r <= cnt_w;
+            row_cnt_r <= row_cnt_w;
+            col_cnt_r <= col_cnt_w;
+            state_r <= state_w;
         end
     end
 
