@@ -78,7 +78,7 @@ module LBP # (
     // AXI control signals
     reg [2:0] axi_read_cnt_r, axi_read_cnt_w;   // count of AXI read transactions (0 to 3)
     reg [ADDR_WIDTH-1:0] axi_read_addr_r, axi_read_addr_w;
-    reg [ADDR_WIDTH-1:0] axi_write_addr_r, axi_write_addr_w;
+    reg [ADDR_WIDTH :0] axi_write_addr_r, axi_write_addr_w;
     reg [DATA_WIDTH-1:0] axi_write_data_r, axi_write_data_w;
     reg read_start_r, read_start_w;
     reg write_start_r, write_start_w;
@@ -104,7 +104,7 @@ module LBP # (
         .finish(axi_finish),
         .read_addr(axi_read_addr_r),
         .read_len({6'b0, axi_read_len_w}),
-        .write_addr(axi_write_addr_r),
+        .write_addr(axi_write_addr_r + 15'd16384),
         .write_len(8'b0),
         .write_data(axi_write_data_r),
         .read_data(read_data_w),
@@ -408,7 +408,7 @@ module AXI_MASTER # (
     // LBP-to-AXI control signals
     input  [ADDR_WIDTH-1:0] read_addr,
     input  [           7:0] read_len,
-    input  [ADDR_WIDTH-1:0] write_addr,
+    input  [ADDR_WIDTH :0] write_addr,
     input  [           7:0] write_len,
     input  [DATA_WIDTH-1:0] write_data,
 
@@ -470,10 +470,10 @@ module AXI_MASTER # (
 
     // aw channel
     reg data_awvalid_r, data_awvalid_w;
-    reg [ADDR_WIDTH-1:0] data_awaddr_r, data_awaddr_w;
+    reg [ADDR_WIDTH:0] data_awaddr_r, data_awaddr_w;
     reg [7:0] data_awlen_r, data_awlen_w;
     assign data_awvalid = data_awvalid_r;
-    assign data_awaddr  = data_awaddr_r + 16384;
+    assign data_awaddr  = data_awaddr_r;
     assign data_awlen   = data_awlen_r;
     assign data_awsize  = $clog2(DATA_WIDTH/8);
     assign data_awburst = 2'b01;             // INCR
