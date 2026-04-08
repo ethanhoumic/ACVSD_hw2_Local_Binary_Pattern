@@ -64,13 +64,13 @@ module LBP # (
     genvar j;
     generate
         for (j = 0; j < 9; j = j + 1) begin
-            assign lbp_flag_w[j] = (data_r[j] > data_r[8]) ? 1 : 0;
+            assign lbp_flag_w[j] = (data_r[j] >= data_r[8]) ? 1 : 0;
         end
     endgenerate
     assign lbp_0_w   = {lbp_flag_w[7], lbp_flag_w[6], lbp_flag_w[5], lbp_flag_w[4], lbp_flag_w[3], lbp_flag_w[2], lbp_flag_w[1], lbp_flag_w[0]};
-    assign lbp_90_w  = {lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1], lbp_flag_w[2], lbp_flag_w[3], lbp_flag_w[4], lbp_flag_w[5]};
-    assign lbp_180_w = {lbp_flag_w[4], lbp_flag_w[5], lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1], lbp_flag_w[2], lbp_flag_w[3]};
-    assign lbp_270_w = {lbp_flag_w[2], lbp_flag_w[3], lbp_flag_w[4], lbp_flag_w[5], lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1]};
+    assign lbp_90_w  = {lbp_flag_w[5], lbp_flag_w[4], lbp_flag_w[3], lbp_flag_w[2], lbp_flag_w[1], lbp_flag_w[0], lbp_flag_w[7], lbp_flag_w[6]};
+    assign lbp_180_w = {lbp_flag_w[3], lbp_flag_w[2], lbp_flag_w[1], lbp_flag_w[0], lbp_flag_w[7], lbp_flag_w[6], lbp_flag_w[5], lbp_flag_w[4]};
+    assign lbp_270_w = {lbp_flag_w[1], lbp_flag_w[0], lbp_flag_w[7], lbp_flag_w[6], lbp_flag_w[5], lbp_flag_w[4], lbp_flag_w[3], lbp_flag_w[2]};
     assign lbp_min1_w = (lbp_0_w < lbp_90_w) ? lbp_0_w : lbp_90_w;
     assign lbp_min2_w = (lbp_180_w < lbp_270_w) ? lbp_180_w : lbp_270_w;
     assign lbp_min_w  = (lbp_min1_w < lbp_min2_w) ? lbp_min1_w : lbp_min2_w;
@@ -85,9 +85,9 @@ module LBP # (
     wire [DATA_WIDTH-1:0] read_data_w;
     wire read_valid_w;
     wire axi_finish;
-    wire [1:0] axi_read_len_w = (col_cnt_r == 127 || col_cnt_r == 0) ? 2 : 3;  // read 2 pixel for first and last column, otherwise read 3 pixels
+    wire [1:0] axi_read_len_w = (col_cnt_r == 127 || col_cnt_r == 0) ? 1 : 2;  // read 2 pixel for first and last column, otherwise read 3 pixels
 
-    wire read_en = (state_r == S_READ) && axi_finish && (cnt_r != 8);
+    wire read_en = (state_r == S_READ) && axi_finish && (cnt_r < 7);
 
     // done signal
     reg finish_r, finish_w;
@@ -207,7 +207,7 @@ module LBP # (
                 end
             end 
             S_READ: begin
-                if (read_valid_w && !data_rlast) begin
+                if (read_valid_w) begin
                     if (col_cnt_r == 0 || col_cnt_r == 127) begin
                         cnt_w = (cnt_r == 8) ? 7 : cnt_r + 1;
                     end
@@ -260,7 +260,7 @@ module LBP # (
             end
             S_READ: begin
                 read_start_w = read_en;
-                if (read_valid_w && !data_rlast) begin
+                if (read_valid_w) begin
                     if (col_cnt_r == 0) begin
                         case (axi_read_cnt_r)
                             0: begin
@@ -304,13 +304,13 @@ module LBP # (
                             default: begin end
                         endcase
                     end
-                    if (axi_read_cnt_r == axi_read_len_w - 1 && read_valid_w) begin
+                    if (axi_read_cnt_r == axi_read_len_w && read_valid_w) begin
                         axi_read_cnt_w = 0;
                         if (row_cnt_r == 127 && (col_cnt_r == 0 || col_cnt_r == 126)) axi_read_addr_w = col_cnt_r;
-                        else if (row_cnt_r == 127) axi_read_addr_w = col_cnt_r + 1;
+                        else if (row_cnt_r == 127) axi_read_addr_w = col_cnt_r;
                         else axi_read_addr_w = axi_read_addr_r + 128;
                     end
-                    else if (read_valid_w && !data_rlast) begin
+                    else if (read_valid_w) begin
                         axi_read_cnt_w = axi_read_cnt_r + 1;
                     end
                 end
@@ -473,7 +473,7 @@ module AXI_MASTER # (
     reg [ADDR_WIDTH-1:0] data_awaddr_r, data_awaddr_w;
     reg [7:0] data_awlen_r, data_awlen_w;
     assign data_awvalid = data_awvalid_r;
-    assign data_awaddr  = data_awaddr_r;
+    assign data_awaddr  = data_awaddr_r + 16384;
     assign data_awlen   = data_awlen_r;
     assign data_awsize  = $clog2(DATA_WIDTH/8);
     assign data_awburst = 2'b01;             // INCR
