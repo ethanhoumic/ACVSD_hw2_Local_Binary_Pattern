@@ -256,8 +256,9 @@ initial begin // result compare
 				else begin
 					//$display("pixel %d is FAIL !!", i); 
 					err = err+1;
-					if (err <= 10) $display("Output pixel %d are wrong!", i);
-					if (err == 11) begin $display("Find the wrong pixel reached a total of more than 10 !, Please check the code .....\n");  end
+					// if (err <= 10) 
+                    $display("Output pixel %d is wrong! Output = %h, golden = %h", i, axi_ram_inst.mem[i+16384], exp_mem[i]);
+					// if (err == 11) begin $display("Find the wrong pixel reached a total of more than 10 !, Please check the code .....\n");  end
 				end
 				if( ((i%1000) === 0) || (i == 16383))begin  
 					if ( err === 0)

@@ -1,10 +1,10 @@
 // Add your RTL files
-./SPGL.v
-./PS_Feedback.v
-./FIFO.v
-./Data_DMA.v
-./LBP_Core.v
-./LBP_AXI.v
+// ./SPGL.v
+// ./PS_Feedback.v
+// ./FIFO.v
+// ./Data_DMA.v
+// ./LBP_Core.v
+// ./LBP_AXI.v
 ./LBP.v
 
 // tb
