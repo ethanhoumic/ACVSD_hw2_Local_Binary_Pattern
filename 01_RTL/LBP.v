@@ -134,36 +134,59 @@ module LBP # (
     );
 
     // CDC synchronization
+    reg start_toggle_r;
     reg start_sync1, start_sync2, start_sync3;
+    wire start_pulse_B = start_sync2 ^ start_sync3;
+
+    reg finish_toggle_r;
+    reg finish_sync1, finish_sync2, finish_sync3;
     reg finish_cnt_r;
+    wire finish_pulse_A = finish_sync2 ^ finish_sync3;
+    assign finish = (finish_cnt_r > 0);
+
+    // clk_A domain
+
+    always @(posedge clk_A or posedge rst) begin
+        if (rst) begin
+            finish_cnt_r <= 0;
+            finish_sync1 <= 0;
+            finish_sync2 <= 0;
+            finish_sync3 <= 0;
+            start_toggle_r <= 0;
+        end
+        else begin
+            if (start) begin
+                start_toggle_r <= ~start_toggle_r;
+            end
+            finish_sync1 <= finish_toggle_r;
+            finish_sync2 <= finish_sync1;
+            finish_sync3 <= finish_sync2;
+            if (finish_pulse_A) begin
+                finish_cnt_r <= finish_cnt_r + 1;
+            end
+        end
+    end
+
+    // clk_B domain
 
     always @(posedge clk_B or posedge rst) begin
         if (rst) begin
             start_sync1 <= 0;
             start_sync2 <= 0;
             start_sync3 <= 0;
+            finish_toggle_r <= 0;
         end
         else begin
-            start_sync1 <= start;
+            start_sync1 <= start_toggle_r;
             start_sync2 <= start_sync1;
             start_sync3 <= start_sync2;
-        end
-    end
-
-    always @(posedge clk_A or posedge rst) begin
-        if (rst) begin
-            finish_cnt_r <= 0;
-        end
-        else begin
             if (finish_r) begin
-                finish_cnt_r <= finish_cnt_r - 1;
+                finish_toggle_r <= ~finish_toggle_r;
             end
         end
     end
 
     assign finish = (finish_cnt_r > 0);
-
-    wire start_pulse_B = start_sync2 && !start_sync3;
 
     // FSM
     always @(*) begin
