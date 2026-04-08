@@ -4,8 +4,19 @@
 `define SDFFILE    "../02_SYN/Netlist/LBP_syn.sdf"	  // Modify your sdf file name
 `define End_CYCLE  10000000              // Modify cycle times once your design need more cycle times!
 
-`define PAT        "../00_TESTBED/pattern/pattern1.dat"    
-`define EXP        "../00_TESTBED/pattern/golden1.dat"     
+`ifdef p1
+    `define PAT        "../00_TESTBED/pattern/pattern1.dat"    
+    `define EXP        "../00_TESTBED/pattern/golden1.dat"  
+`elsif p2
+    `define PAT        "../00_TESTBED/pattern/pattern2.dat"    
+    `define EXP        "../00_TESTBED/pattern/golden2.dat"
+`endif
+
+`ifndef PAT
+    `define PAT "../00_TESTBED/pattern/pattern1.dat"
+    `define EXP "../00_TESTBED/pattern/golden1.dat"
+`endif
+
 
 module testfixture# (
     parameter DATA_WIDTH   = 8             ,
@@ -202,6 +213,8 @@ end
 initial begin // result compare
 	$display("-----------------------------------------------------\n");
  	$display("START!!! Simulation Start .....\n");
+    $display("The pattern is from %s \n", `PAT);
+    $display("The golden is from %s \n", `EXP);
  	$display("-----------------------------------------------------\n");
 
    rst   = 0;

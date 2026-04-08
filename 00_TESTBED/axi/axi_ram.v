@@ -26,7 +26,18 @@ THE SOFTWARE.
 
 `timescale 1ns/1ps
 
-`define PAT "../00_TESTBED/pattern/pattern1.dat"
+`ifdef p1
+    `define PAT        "../00_TESTBED/pattern/pattern1.dat"    
+    `define EXP        "../00_TESTBED/pattern/golden1.dat"  
+`elsif p2
+    `define PAT        "../00_TESTBED/pattern/pattern2.dat"    
+    `define EXP        "../00_TESTBED/pattern/golden2.dat"
+`endif
+
+`ifndef PAT
+    `define PAT "../00_TESTBED/pattern/pattern1.dat"
+    `define EXP "../00_TESTBED/pattern/golden1.dat"
+`endif
 
 /*
  * AXI4 RAM

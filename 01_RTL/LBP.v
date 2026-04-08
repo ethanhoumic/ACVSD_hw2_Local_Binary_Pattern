@@ -305,13 +305,13 @@ module LBP # (
                             default: begin end
                         endcase
                     end
-                    if (axi_read_cnt_r == axi_read_len_w && read_valid_w) begin
+                    if (axi_read_cnt_r == axi_read_len_w) begin
                         axi_read_cnt_w = 0;
                         if (row_cnt_r == 127 && (col_cnt_r == 0 || col_cnt_r == 126)) axi_read_addr_w = col_cnt_r;
                         else if (row_cnt_r == 127) axi_read_addr_w = col_cnt_r;
                         else axi_read_addr_w = axi_read_addr_r + 128;
                     end
-                    else if (read_valid_w) begin
+                    else begin
                         axi_read_cnt_w = axi_read_cnt_r + 1;
                     end
                 end
