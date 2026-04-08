@@ -185,6 +185,7 @@ module LBP # (
             S_WRITE: begin
                 if (axi_finish) begin
                     if (row_cnt_r == 127 && col_cnt_r == 127) state_w = S_DONE;
+                    else if (row_cnt_r == 126) state_w = S_CALC;
                     else state_w = S_READ;
                 end
             end
@@ -227,7 +228,7 @@ module LBP # (
                         cnt_w = (col_cnt_r == 126) ? 4 : 3; 
                     end
                     else begin
-                        cnt_w = (col_cnt_r == 0 || col_cnt_r == 127) ? 7 : 6;
+                        cnt_w = (row_cnt_r == 126) ? 8 : ((col_cnt_r == 0 || col_cnt_r == 127) ? 7 : 6);
                     end
                 end
             end
@@ -331,6 +332,17 @@ module LBP # (
                     data_w[1] = 0;
                     data_w[2] = 0;
                 end
+                else if (row_cnt_r == 126) begin
+                    data_w[4] = 0;
+                    data_w[5] = 0;
+                    data_w[6] = 0;
+                    data_w[0] = data_r[7];
+                    data_w[1] = data_r[8];
+                    data_w[2] = data_r[3];
+                    data_w[7] = data_r[6];
+                    data_w[8] = data_r[5];
+                    data_w[3] = data_r[4];
+                end
                 else begin  //  shift data
                     data_w[0] = data_r[7];
                     data_w[1] = data_r[8];
@@ -344,7 +356,8 @@ module LBP # (
                 write_start_w = 0;
                 if (axi_finish) begin
                     if (row_cnt_r == 127 && col_cnt_r == 127) finish_w = 1;
-                    else read_start_w = 1;
+                    else if (row_cnt_r != 126) read_start_w = 1;
+                    else axi_read_addr_w = col_cnt_r;
                     axi_write_addr_w = (row_cnt_r == 127) ? (col_cnt_r + 1) : (axi_write_addr_r + 128); 
                 end
             end
