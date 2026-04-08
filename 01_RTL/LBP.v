@@ -51,12 +51,12 @@ module LBP # (
     reg [2:0] state_r, state_w;
 
     reg [7:0] cnt_r, cnt_w;
-    reg [7:0] row_cnt_r, row_cnt_w;        // count of rows processed (0 to 127)
-    reg [7:0] col_cnt_r, col_cnt_w;        // count of columns processed (0 to 127)
+    reg [6:0] row_cnt_r, row_cnt_w;        // count of rows processed (0 to 127)
+    reg [6:0] col_cnt_r, col_cnt_w;        // count of columns processed (0 to 127)
 
     // lbp calculation
-    reg  [7:0] data_r [0:8], data_w [0:8];               // [0] [1] [2]
-    wire [7:0] lbp_0_w, lbp_90_w, lbp_180_w, lbp_270_w;  // [7] [8] [3]
+    reg  [7:0] data_r [0:8], data_w [0:8];                 // [0] [1] [2]
+    wire [7:0] lbp_0_w, lbp_90_w, lbp_180_w, lbp_270_w;    // [7] [8] [3]
     wire       lbp_flag_w [0:8];                           // [6] [5] [4]
     wire [7:0] lbp_min1_w, lbp_min2_w, lbp_min_w;;
     
@@ -68,11 +68,11 @@ module LBP # (
         end
     endgenerate
     assign lbp_0_w   = {lbp_flag_w[7], lbp_flag_w[6], lbp_flag_w[5], lbp_flag_w[4], lbp_flag_w[3], lbp_flag_w[2], lbp_flag_w[1], lbp_flag_w[0]};
-    assign lbp_90_W  = {lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1], lbp_flag_w[2], lbp_flag_w[3], lbp_flag_w[4], lbp_flag_w[5]};
+    assign lbp_90_w  = {lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1], lbp_flag_w[2], lbp_flag_w[3], lbp_flag_w[4], lbp_flag_w[5]};
     assign lbp_180_w = {lbp_flag_w[4], lbp_flag_w[5], lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1], lbp_flag_w[2], lbp_flag_w[3]};
-    assign lbp_270_W = {lbp_flag_w[2], lbp_flag_w[3], lbp_flag_w[4], lbp_flag_w[5], lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1]};
-    assign lbp_min1_w = (lbp_0_w < lbp_90_W) ? lbp_0_w : lbp_90_W;
-    assign lbp_min2_w = (lbp_180_w < lbp_270_W) ? lbp_180_w : lbp_270_W;
+    assign lbp_270_w = {lbp_flag_w[2], lbp_flag_w[3], lbp_flag_w[4], lbp_flag_w[5], lbp_flag_w[6], lbp_flag_w[7], lbp_flag_w[0], lbp_flag_w[1]};
+    assign lbp_min1_w = (lbp_0_w < lbp_90_w) ? lbp_0_w : lbp_90_w;
+    assign lbp_min2_w = (lbp_180_w < lbp_270_w) ? lbp_180_w : lbp_270_w;
     assign lbp_min_w  = (lbp_min1_w < lbp_min2_w) ? lbp_min1_w : lbp_min2_w;
 
     // AXI control signals
@@ -83,19 +83,21 @@ module LBP # (
     reg read_start_r, read_start_w;
     reg write_start_r, write_start_w;
     wire [DATA_WIDTH-1:0] read_data_w;
-    wire axi_finish_w;
     wire read_valid_w;
+    wire axi_finish;
     wire [1:0] axi_read_len_w = (col_cnt_r == 127 || col_cnt_r == 0) ? 2 : 3;  // read 2 pixel for first and last column, otherwise read 3 pixels
+
+    wire read_en = (state_r == S_READ) && axi_finish && (cnt_r != 8);
 
     // done signal
     reg finish_r, finish_w;
 
-        AXI_MASTER #(
+    AXI_MASTER #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(ADDR_WIDTH),
         .STRB_WIDTH(STRB_WIDTH)
     ) axi_master_inst (
-        .clk(clk_A),
+        .clk(clk_B),
         .rst(rst),
         .read_start(read_start_r),
         .write_start(write_start_r),
@@ -133,29 +135,27 @@ module LBP # (
 
     // CDC synchronization
     reg start_sync1, start_sync2, start_sync3;
-    reg finish_sync1, finish_sync2, finish_sync3;
-    reg [1:0] finish_cnt_r;  // count of finish signal received in clk_B domain 
+    reg finish_cnt_r;
 
     always @(posedge clk_B or posedge rst) begin
         if (rst) begin
             start_sync1 <= 0;
             start_sync2 <= 0;
             start_sync3 <= 0;
-            finish_sync1 <= 0;
-            finish_sync2 <= 0;
-            finish_cnt_r <= 0;
         end
         else begin
             start_sync1 <= start;
             start_sync2 <= start_sync1;
             start_sync3 <= start_sync2;
-            finish_sync1 <= finish_r;
-            finish_sync2 <= finish_sync1;
-            finish_sync3 <= finish_sync2;
-            if (!finish_sync3 && finish_sync2) begin
-                finish_cnt_r <= 3;
-            end
-            else if (finish_cnt_r > 0) begin
+        end
+    end
+
+    always @(posedge clk_A or posedge rst) begin
+        if (rst) begin
+            finish_cnt_r <= 0;
+        end
+        else begin
+            if (finish_r) begin
                 finish_cnt_r <= finish_cnt_r - 1;
             end
         end
@@ -175,7 +175,7 @@ module LBP # (
                 end
             end 
             S_READ: begin
-                if (axi_finish) begin
+                if (cnt_r == 8) begin
                     state_w = S_CALC;
                 end
             end
@@ -203,12 +203,17 @@ module LBP # (
         case (state_r)
             S_IDLE: begin
                 if (start_pulse_B) begin
-                    cnt_w = 0;
+                    cnt_w = 4;
                 end
             end 
             S_READ: begin
-                if (read_valid_w) begin
-                    cnt_w = 1;
+                if (read_valid_w && !data_rlast) begin
+                    if (col_cnt_r == 0 || col_cnt_r == 127) begin
+                        cnt_w = (cnt_r == 8) ? 7 : cnt_r + 1;
+                    end
+                    else begin
+                        cnt_w = (cnt_r == 8) ? 6 : cnt_r + 1;
+                    end
                 end
             end
             S_CALC: begin
@@ -219,7 +224,10 @@ module LBP # (
                     row_cnt_w = row_cnt_r + 1;
                     col_cnt_w = (row_cnt_r == 127) ? col_cnt_r + 1 : col_cnt_r;
                     if (row_cnt_r == 127) begin
-                        cnt_w = 0;
+                        cnt_w = (col_cnt_r == 126) ? 4 : 3; 
+                    end
+                    else begin
+                        cnt_w = (col_cnt_r == 0 || col_cnt_r == 127) ? 7 : 6;
                     end
                 end
             end
@@ -232,13 +240,13 @@ module LBP # (
         for (i = 0; i < 9; i = i + 1) begin
             data_w[i] = data_r[i];
         end
-        finish_w = finish_r;
         read_start_w = read_start_r;
         write_start_w = write_start_r;
         axi_read_cnt_w = axi_read_cnt_r;
         axi_read_addr_w = axi_read_addr_r;
         axi_write_addr_w = axi_write_addr_r;
         axi_write_data_w = axi_write_data_r;
+        finish_w = finish_r;
         case (state_r)
             S_IDLE: begin
                 if (start_pulse_B) begin
@@ -251,30 +259,58 @@ module LBP # (
                 end
             end
             S_READ: begin
-                read_start_w = 0;
-                if (read_valid_w) begin
-                    case (axi_read_cnt_r)
-                        0: begin
-                            if (!cnt_r) data_w[7] = read_data_w;
-                            else data_w[6] = read_data_w;
-                        end
-                        1: begin
-                            if (!cnt_r) data_w[8] = read_data_w;
-                            else data_w[5] = read_data_w;
-                        end
-                        2: begin
-                            if (!cnt_r) data_w[3] = read_data_w;
-                            else data_w[4] = read_data_w;
-                        end
-                        default: begin end
-                    endcase
+                read_start_w = read_en;
+                if (read_valid_w && !data_rlast) begin
+                    if (col_cnt_r == 0) begin
+                        case (axi_read_cnt_r)
+                            0: begin
+                                if (cnt_r == 4) data_w[8] = read_data_w;
+                                else data_w[5] = read_data_w;
+                            end
+                            1: begin
+                                if (cnt_r == 5) data_w[3] = read_data_w;
+                                else data_w[4] = read_data_w;
+                            end
+                            default: begin end
+                        endcase
+                    end
+                    else if (col_cnt_r == 127) begin
+                        case (axi_read_cnt_r)
+                            0: begin
+                                if (cnt_r == 4) data_w[7] = read_data_w;
+                                else data_w[6] = read_data_w;
+                            end
+                            1: begin
+                                if (cnt_r == 5) data_w[8] = read_data_w;
+                                else data_w[5] = read_data_w;
+                            end
+                            default: begin end
+                        endcase
+                    end
+                    else begin
+                        case (axi_read_cnt_r)
+                            0: begin
+                                if (cnt_r == 3) data_w[7] = read_data_w;
+                                else data_w[6] = read_data_w;
+                            end
+                            1: begin
+                                if (cnt_r == 4) data_w[8] = read_data_w;
+                                else data_w[5] = read_data_w;
+                            end
+                            2: begin
+                                if (cnt_r == 5) data_w[3] = read_data_w;
+                                else data_w[4] = read_data_w;
+                            end
+                            default: begin end
+                        endcase
+                    end
                     if (axi_read_cnt_r == axi_read_len_w - 1 && read_valid_w) begin
                         axi_read_cnt_w = 0;
                         if (row_cnt_r == 127 && (col_cnt_r == 0 || col_cnt_r == 126)) axi_read_addr_w = col_cnt_r;
                         else if (row_cnt_r == 127) axi_read_addr_w = col_cnt_r + 1;
                         else axi_read_addr_w = axi_read_addr_r + 128;
                     end
-                    else if (read_valid_w) begin
+                    else if (read_valid_w && !data_rlast) begin
                         axi_read_cnt_w = axi_read_cnt_r + 1;
                     end
                 end
@@ -308,6 +344,7 @@ module LBP # (
                 write_start_w = 0;
                 if (axi_finish) begin
                     if (row_cnt_r == 127 && col_cnt_r == 127) finish_w = 1;
+                    else read_start_w = 1;
                     axi_write_addr_w = (row_cnt_r == 127) ? (col_cnt_r + 1) : (axi_write_addr_r + 128); 
                 end
             end
@@ -320,7 +357,6 @@ module LBP # (
 
     always @(posedge clk_B or posedge rst) begin
         if (rst) begin
-            finish_r <= 0;
             read_start_r <= 0;
             write_start_r <= 0;
             axi_read_cnt_r <= 0;
@@ -331,9 +367,12 @@ module LBP # (
             row_cnt_r <= 0;
             col_cnt_r <= 0;
             state_r <= S_IDLE;
+            finish_r <= 0;
+            for (i = 0; i < 9; i = i + 1) begin
+                data_r[i] <= 0;
+            end
         end
         else begin
-            finish_r <= finish_w;
             read_start_r <= read_start_w;
             write_start_r <= write_start_w;
             axi_read_cnt_r <= axi_read_cnt_w;
@@ -344,6 +383,10 @@ module LBP # (
             row_cnt_r <= row_cnt_w;
             col_cnt_r <= col_cnt_w;
             state_r <= state_w;
+            finish_r <= finish_w;
+            for (i = 0; i < 9; i = i + 1) begin
+                data_r[i] <= data_w[i];
+            end
         end
     end
 
@@ -444,8 +487,7 @@ module AXI_MASTER # (
     assign data_wstrb   = {STRB_WIDTH{1'b1}};
 
     // AXI to LBP control signals
-    reg finish_r, finish_w;
-    assign finish = finish_r;
+    assign finish = (data_rlast && data_rvalid && data_rready) || (data_wlast && data_wvalid && data_wready);
 
     // AXI FSM
     always @(*) begin
@@ -489,9 +531,6 @@ module AXI_MASTER # (
         // w channel
         data_wvalid_w  = data_wvalid_r;
         data_wlen_cnt_w = data_wlen_cnt_r;
-        
-        // AXI to LBP control signals
-        finish_w = finish_r;
 
         case (state_r)
             S_IDLE:  begin
@@ -516,7 +555,6 @@ module AXI_MASTER # (
             S_RDATA: begin
                 if (data_rvalid && data_rready && data_rlast) begin
                     data_rready_w  = 0;
-                    finish_w       = 1;
                 end
             end
             S_WSHAKE: begin
@@ -529,7 +567,6 @@ module AXI_MASTER # (
                 if (data_wvalid && data_wready && data_wlen_cnt_r == data_awlen_r) begin
                     data_wvalid_w   = 0;
                     data_wlen_cnt_w = 0;
-                    finish_w        = 1;
                 end
                 else if (data_wvalid && data_wready) begin
                     data_wlen_cnt_w = data_wlen_cnt_r + 1;
@@ -559,6 +596,7 @@ module AXI_MASTER # (
             // w channel
             data_wvalid_r  <= 0;
             data_wlen_cnt_r <= 0;
+
         end
         else begin
             state_r <= state_w;
@@ -579,6 +617,7 @@ module AXI_MASTER # (
             // w channel
             data_wvalid_r  <= data_wvalid_w;
             data_wlen_cnt_r <= data_wlen_cnt_w;
+
         end
     end
 
