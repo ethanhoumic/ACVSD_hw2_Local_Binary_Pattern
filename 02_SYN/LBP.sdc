@@ -1,5 +1,5 @@
 set CYCLE_A 100.0
-set CYCLE_B 6.0
+set CYCLE_B 1.0
 
 create_clock -name "clk_A"  -period $CYCLE_A   clk_A
 create_clock -name "clk_B"  -period $CYCLE_B   clk_B
@@ -24,5 +24,6 @@ set_output_delay 0.5  -clock clk_A {finish}
 set_drive        1        [all_inputs]
 set_load         0.05     [all_outputs]
 
+set_clock_groups -asynchronous -group {clk_A} -group {clk_B}
 # Add your Clock Domain Crossing constraint here
 # Hint: set_false_path or set_clock_group

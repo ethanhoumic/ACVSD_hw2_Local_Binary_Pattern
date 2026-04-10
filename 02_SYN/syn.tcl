@@ -72,8 +72,11 @@ check_design > Report/check_design.txt
 check_timing > Report/check_timing.txt
 set_fix_multiple_port_nets -all -buffer_constants
 
-compile
-
+compile_ultra
+compile_ultra -inc
+compile -inc -only_hold_time
+compile -inc -only_hold_time
+compile -inc -only_hold_time
 #======================================================
 #  Output Reports 
 #======================================================
@@ -111,6 +114,7 @@ write_sdc  ./Netlist/${DESIGN}_syn.sdc -version 1.8
 #======================================================
 
 report_timing
+report_timing -delay_type min
 report_area
 check_design
 
